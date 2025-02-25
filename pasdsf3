@@ -1,0 +1,567 @@
+-- SERVICES
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local UserInputService = game:GetService("UserInputService")
+local LocalPlayer = Players.LocalPlayer
+
+------------------------------------------------
+-- FLIGHT TELEPORT FONKSİYONLARI (değişmedi)
+------------------------------------------------
+
+local BV_NAME = "FlightBV"
+local BG_NAME = "FlightBG"
+
+local function isPathClear(fromPos, toPos)
+    local rayParams = RaycastParams.new()
+    if LocalPlayer.Character then
+        rayParams.FilterDescendantsInstances = {LocalPlayer.Character}
+    else
+        rayParams.FilterDescendantsInstances = {}
+    end
+    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+    local direction = toPos - fromPos
+    local rayResult = Workspace:Raycast(fromPos, direction, rayParams)
+    return (rayResult == nil)
+end
+
+local function stopFlight()
+    local character = LocalPlayer.Character
+    if character then
+        local hrp = character:FindFirstChild("HumanoidRootPart")
+        if hrp then
+            local bv = hrp:FindFirstChild(BV_NAME)
+            if bv then bv:Destroy() end
+            local bg = hrp:FindFirstChild(BG_NAME)
+            if bg then bg:Destroy() end
+        end
+    end
+end
+
+local function flyToPlayer(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return end
+    local targetCharacter = targetPlayer.Character or targetPlayer.CharacterAdded:Wait()
+    local targetHRP = targetCharacter:WaitForChild("HumanoidRootPart", 10)
+    if not targetHRP then return end
+    local localCharacter = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local localHRP = localCharacter:WaitForChild("HumanoidRootPart", 10)
+    if not localHRP then return end
+
+    stopFlight()
+
+    local bv = Instance.new("BodyVelocity")
+    bv.Name = BV_NAME
+    bv.Parent = localHRP
+    bv.MaxForce = Vector3.new(1e5,1e5,1e5)
+    bv.Velocity = Vector3.new(0,0,0)
+
+    local bg = Instance.new("BodyGyro")
+    bg.Name = BG_NAME
+    bg.Parent = localHRP
+    bg.MaxTorque = Vector3.new(1e5,1e5,1e5)
+    bg.D = 500
+    bg.P = 3000
+
+    local ASCEND_SPEED = 500
+    local HORIZONTAL_SPEED = 200
+    local GROUND_SPEED = 200
+    local OBSTACLE_CLEAR_HEIGHT = 200
+    local ARRIVE_THRESHOLD = 5
+    local UPDATE_DT = 0.05
+
+    local flightActive = true
+    spawn(function()
+        while flightActive and (localHRP.Position - targetHRP.Position).Magnitude > ARRIVE_THRESHOLD do
+            local pathClear = isPathClear(localHRP.Position, targetHRP.Position)
+            if not pathClear then
+                if localHRP.Position.Y < targetHRP.Position.Y + OBSTACLE_CLEAR_HEIGHT then
+                    bv.Velocity = Vector3.new(0, ASCEND_SPEED, 0)
+                    bg.CFrame = CFrame.new(localHRP.Position, targetHRP.Position)
+                else
+                    local direction = (targetHRP.Position - localHRP.Position)
+                    direction = Vector3.new(direction.X, 0, direction.Z)
+                    if direction.Magnitude > 0 then direction = direction.Unit end
+                    bv.Velocity = direction * GROUND_SPEED
+                    bg.CFrame = CFrame.new(localHRP.Position, targetHRP.Position)
+                end
+            else
+                local targetHorizontalPos = Vector3.new(targetHRP.Position.X, localHRP.Position.Y, targetHRP.Position.Z)
+                local direction = (targetHorizontalPos - localHRP.Position)
+                if direction.Magnitude > 0 then direction = direction.Unit end
+                bv.Velocity = direction * HORIZONTAL_SPEED
+                bg.CFrame = CFrame.new(localHRP.Position, targetHorizontalPos)
+            end
+            RunService.RenderStepped:Wait(UPDATE_DT)
+        end
+
+        local finalTarget = Vector3.new(targetHRP.Position.X, targetHRP.Position.Y + 5, targetHRP.Position.Z)
+        while flightActive and math.abs(localHRP.Position.Y - finalTarget.Y) > 3 do
+            local direction = (finalTarget - localHRP.Position)
+            if direction.Magnitude > 0 then direction = direction.Unit end
+            bv.Velocity = direction * HORIZONTAL_SPEED
+            bg.CFrame = CFrame.new(localHRP.Position, finalTarget)
+            RunService.RenderStepped:Wait(UPDATE_DT)
+        end
+        flightActive = false
+        stopFlight()
+    end)
+end
+
+------------------------------------------------
+-- HİLE FONKSİYONELLİKLERİNİN TOGGLE'LARI
+------------------------------------------------
+
+-- WalkSpeed Bypass
+local CUSTOM_WALKSPEED = 100
+local walkSpeedBypassActive = false
+local walkSpeedConnection
+
+local function enableWalkSpeedBypass()
+    if walkSpeedConnection then return end
+    walkSpeedConnection = RunService.RenderStepped:Connect(function()
+        if LocalPlayer.Character then
+            local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.WalkSpeed ~= CUSTOM_WALKSPEED then
+                humanoid.WalkSpeed = CUSTOM_WALKSPEED
+            end
+        end
+    end)
+end
+
+local function disableWalkSpeedBypass()
+    if walkSpeedConnection then
+        walkSpeedConnection:Disconnect()
+        walkSpeedConnection = nil
+    end
+    if LocalPlayer.Character then
+        local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.WalkSpeed = 16
+        end
+    end
+end
+
+-- Infinite Jump
+local infiniteJumpActive = false
+local infiniteJumpConnection
+
+local function enableInfiniteJump()
+    if infiniteJumpConnection then return end
+    infiniteJumpConnection = UserInputService.JumpRequest:Connect(function()
+        if infiniteJumpActive and LocalPlayer.Character then
+            local humanoid = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end
+    end)
+end
+
+local function disableInfiniteJump()
+    if infiniteJumpConnection then
+        infiniteJumpConnection:Disconnect()
+        infiniteJumpConnection = nil
+    end
+end
+
+-- Noclip
+local noclipActive = false
+local noclipConnection
+
+local function enableNoclip()
+    if noclipConnection then return end
+    noclipActive = true
+    noclipConnection = RunService.Stepped:Connect(function()
+        if LocalPlayer.Character then
+            for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+        end
+    end)
+end
+
+local function disableNoclip()
+    noclipActive = false
+    if noclipConnection then
+        noclipConnection:Disconnect()
+        noclipConnection = nil
+    end
+    if LocalPlayer.Character then
+        for _, part in ipairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.CanCollide = true
+            end
+        end
+    end
+end
+
+------------------------------------------------
+-- GUI OLUŞTURMA & DÜZENLEME
+------------------------------------------------
+
+-- Ana ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "CheatGUI"
+screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false
+
+------------------------------------------------
+-- [1] MERKEZDEKİ HİLE PANELİ (Beautify Edilmiş)
+------------------------------------------------
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Parent = screenGui
+mainFrame.Size = UDim2.new(0, 320, 0, 360)
+mainFrame.Position = UDim2.new(0.5, -160, 0.5, -180)
+mainFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+mainFrame.BorderSizePixel = 0
+mainFrame.Visible = false
+mainFrame.Draggable = true
+
+local mainFrameCorner = Instance.new("UICorner", mainFrame)
+mainFrameCorner.CornerRadius = UDim.new(0, 12)
+local mainFrameStroke = Instance.new("UIStroke", mainFrame)
+mainFrameStroke.Color = Color3.fromRGB(80, 80, 80)
+mainFrameStroke.Thickness = 2
+local mainFrameGradient = Instance.new("UIGradient", mainFrame)
+mainFrameGradient.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(50,50,50)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(30,30,30))
+})
+mainFrameGradient.Rotation = 90
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Parent = mainFrame
+titleLabel.Size = UDim2.new(1, 0, 0, 50)
+titleLabel.Position = UDim2.new(0, 0, 0, 0)
+titleLabel.Text = "JailBreak Hacks By unknown"
+titleLabel.BackgroundColor3 = Color3.fromRGB(30,30,30)
+titleLabel.TextScaled = true
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextColor3 = Color3.new(1,1,1)
+local titleCorner = Instance.new("UICorner", titleLabel)
+titleCorner.CornerRadius = UDim.new(0, 12)
+
+local selectButton = Instance.new("TextButton")
+selectButton.Parent = mainFrame
+selectButton.Position = UDim2.new(0.05, 0, 0.2, 0)
+selectButton.Size = UDim2.new(0.4, -5, 0, 50)
+selectButton.Text = "Select Player"
+selectButton.TextScaled = true
+selectButton.Font = Enum.Font.GothamSemibold
+selectButton.BackgroundColor3 = Color3.fromRGB(70,70,70)
+selectButton.TextColor3 = Color3.new(1,1,1)
+local selectCorner = Instance.new("UICorner", selectButton)
+selectCorner.CornerRadius = UDim.new(0, 8)
+
+local stopButton = Instance.new("TextButton")
+stopButton.Parent = mainFrame
+stopButton.Position = UDim2.new(0.55, 0, 0.2, 0)
+stopButton.Size = UDim2.new(0.4, -5, 0, 50)
+stopButton.Text = "Fly Stop"
+stopButton.TextScaled = true
+stopButton.Font = Enum.Font.GothamSemibold
+stopButton.BackgroundColor3 = Color3.fromRGB(70,70,70)
+stopButton.TextColor3 = Color3.new(1,1,1)
+local stopCorner = Instance.new("UICorner", stopButton)
+stopCorner.CornerRadius = UDim.new(0, 8)
+
+local walkSpeedToggleButton = Instance.new("TextButton")
+walkSpeedToggleButton.Parent = mainFrame
+walkSpeedToggleButton.Position = UDim2.new(0.05, 0, 0.4, 0)
+walkSpeedToggleButton.Size = UDim2.new(0.4, -5, 0, 50)
+walkSpeedToggleButton.Text = "WalkSpeed: Off"
+walkSpeedToggleButton.TextScaled = true
+walkSpeedToggleButton.Font = Enum.Font.GothamSemibold
+walkSpeedToggleButton.BackgroundColor3 = Color3.fromRGB(70,70,70)
+walkSpeedToggleButton.TextColor3 = Color3.new(1,1,1)
+local walkSpeedCorner = Instance.new("UICorner", walkSpeedToggleButton)
+walkSpeedCorner.CornerRadius = UDim.new(0, 8)
+
+local infiniteJumpToggleButton = Instance.new("TextButton")
+infiniteJumpToggleButton.Parent = mainFrame
+infiniteJumpToggleButton.Position = UDim2.new(0.55, 0, 0.4, 0)
+infiniteJumpToggleButton.Size = UDim2.new(0.4, -5, 0, 50)
+infiniteJumpToggleButton.Text = "Infinite Jump: Off"
+infiniteJumpToggleButton.TextScaled = true
+infiniteJumpToggleButton.Font = Enum.Font.GothamSemibold
+infiniteJumpToggleButton.BackgroundColor3 = Color3.fromRGB(70,70,70)
+infiniteJumpToggleButton.TextColor3 = Color3.new(1,1,1)
+local infiniteJumpCorner = Instance.new("UICorner", infiniteJumpToggleButton)
+infiniteJumpCorner.CornerRadius = UDim.new(0, 8)
+
+local noclipToggleButton = Instance.new("TextButton")
+noclipToggleButton.Parent = mainFrame
+noclipToggleButton.Position = UDim2.new(0.05, 0, 0.6, 0)
+noclipToggleButton.Size = UDim2.new(0.9, 0, 0, 50)
+noclipToggleButton.Text = "Noclip: Off"
+noclipToggleButton.TextScaled = true
+noclipToggleButton.Font = Enum.Font.GothamSemibold
+noclipToggleButton.BackgroundColor3 = Color3.fromRGB(70,70,70)
+noclipToggleButton.TextColor3 = Color3.new(1,1,1)
+local noclipCorner = Instance.new("UICorner", noclipToggleButton)
+noclipCorner.CornerRadius = UDim.new(0, 8)
+
+local dropdownFrame = Instance.new("ScrollingFrame")
+dropdownFrame.Parent = mainFrame
+dropdownFrame.Size = UDim2.new(0.9, 0, 0, 120)
+dropdownFrame.Position = UDim2.new(0.05, 0, 0.75, 0)
+dropdownFrame.BackgroundColor3 = Color3.fromRGB(50,50,50)
+dropdownFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+dropdownFrame.ScrollBarThickness = 6
+dropdownFrame.Visible = false
+local dropdownCorner = Instance.new("UICorner", dropdownFrame)
+dropdownCorner.CornerRadius = UDim.new(0, 8)
+local listLayout = Instance.new("UIListLayout", dropdownFrame)
+listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+------------------------------------------------
+-- [2] KOORDİNAT GÖSTERİMİ (SOL ALT)
+------------------------------------------------
+
+local coordsLabel = Instance.new("TextLabel")
+coordsLabel.Parent = screenGui
+coordsLabel.AnchorPoint = Vector2.new(0, 1)
+coordsLabel.Position = UDim2.new(0, 10, 1, -10)
+coordsLabel.Size = UDim2.new(0, 250, 0, 40)
+coordsLabel.BackgroundTransparency = 0.5
+coordsLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+coordsLabel.TextColor3 = Color3.new(1,1,1)
+coordsLabel.TextScaled = true
+coordsLabel.Font = Enum.Font.GothamBold
+local coordsCorner = Instance.new("UICorner", coordsLabel)
+coordsCorner.CornerRadius = UDim.new(0, 8)
+local coordsStroke = Instance.new("UIStroke", coordsLabel)
+coordsStroke.Color = Color3.fromRGB(80, 80, 80)
+coordsStroke.Thickness = 2
+
+------------------------------------------------
+-- TUŞ ATAMASI (RE-BINDING) & GLOBAL KEY LISTENER
+------------------------------------------------
+
+-- Tablo: Varsayılan olarak hiçbir atama yok
+local keyBindings = {
+    WalkSpeed = nil,
+    InfiniteJump = nil,
+    Noclip = nil
+}
+-- Rebind modunda hangi hile için tuş atanıyor
+local currentlyRebinding = nil
+
+-- Sağ tıklama ile tuş ataması (Rebind) başlatma
+walkSpeedToggleButton.MouseButton2Click:Connect(function()
+    currentlyRebinding = "WalkSpeed"
+    walkSpeedToggleButton.Text = "WalkSpeed: Waiting..."
+end)
+
+infiniteJumpToggleButton.MouseButton2Click:Connect(function()
+    currentlyRebinding = "InfiniteJump"
+    infiniteJumpToggleButton.Text = "Infinite Jump: Waiting..."
+end)
+
+noclipToggleButton.MouseButton2Click:Connect(function()
+    currentlyRebinding = "Noclip"
+    noclipToggleButton.Text = "Noclip: Waiting..."
+end)
+
+-- Global InputBegan ile hem rebind modunu kontrol edip hem de atanmış tuşlara basılınca toggle işlemi gerçekleştir
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+
+    -- Eğer rebind modundaysa, bu tuş ataması için kullanılır
+    if currentlyRebinding then
+        local newKey = input.KeyCode
+        keyBindings[currentlyRebinding] = newKey
+        if currentlyRebinding == "WalkSpeed" then
+            if walkSpeedBypassActive then
+                walkSpeedToggleButton.Text = "WalkSpeed: On (" .. newKey.Name .. ")"
+            else
+                walkSpeedToggleButton.Text = "WalkSpeed: Off (" .. newKey.Name .. ")"
+            end
+        elseif currentlyRebinding == "InfiniteJump" then
+            if infiniteJumpActive then
+                infiniteJumpToggleButton.Text = "Infinite Jump: On (" .. newKey.Name .. ")"
+            else
+                infiniteJumpToggleButton.Text = "Infinite Jump: Off (" .. newKey.Name .. ")"
+            end
+        elseif currentlyRebinding == "Noclip" then
+            if noclipActive then
+                noclipToggleButton.Text = "Noclip: On (" .. newKey.Name .. ")"
+            else
+                noclipToggleButton.Text = "Noclip: Off (" .. newKey.Name .. ")"
+            end
+        end
+        currentlyRebinding = nil
+        return
+    end
+
+    -- Eğer rebind modunda değilsek, atanmış tuşlara basılınca ilgili toggle gerçekleşsin
+    for cheat, boundKey in pairs(keyBindings) do
+        if boundKey and input.KeyCode == boundKey then
+            if cheat == "WalkSpeed" then
+                walkSpeedBypassActive = not walkSpeedBypassActive
+                if walkSpeedBypassActive then
+                    enableWalkSpeedBypass()
+                    walkSpeedToggleButton.Text = "WalkSpeed: On (" .. boundKey.Name .. ")"
+                else
+                    disableWalkSpeedBypass()
+                    walkSpeedToggleButton.Text = "WalkSpeed: Off (" .. boundKey.Name .. ")"
+                end
+            elseif cheat == "InfiniteJump" then
+                infiniteJumpActive = not infiniteJumpActive
+                if infiniteJumpActive then
+                    enableInfiniteJump()
+                    infiniteJumpToggleButton.Text = "Infinite Jump: On (" .. boundKey.Name .. ")"
+                else
+                    disableInfiniteJump()
+                    infiniteJumpToggleButton.Text = "Infinite Jump: Off (" .. boundKey.Name .. ")"
+                end
+            elseif cheat == "Noclip" then
+                noclipActive = not noclipActive
+                if noclipActive then
+                    enableNoclip()
+                    noclipToggleButton.Text = "Noclip: On (" .. boundKey.Name .. ")"
+                else
+                    disableNoclip()
+                    noclipToggleButton.Text = "Noclip: Off (" .. boundKey.Name .. ")"
+                end
+            end
+        end
+    end
+end)
+
+------------------------------------------------
+-- BAĞLANTILAR VE EVENTLER (GUI)
+------------------------------------------------
+
+local function updatePlayerList()
+    for _, child in ipairs(dropdownFrame:GetChildren()) do
+        if child:IsA("TextButton") then
+            child:Destroy()
+        end
+    end
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local playerButton = Instance.new("TextButton")
+            playerButton.Parent = dropdownFrame
+            playerButton.Size = UDim2.new(1, 0, 0, 30)
+            playerButton.Text = player.Name
+            playerButton.TextScaled = true
+            playerButton.Font = Enum.Font.GothamSemibold
+            playerButton.BackgroundColor3 = Color3.fromRGB(80,80,80)
+            playerButton.TextColor3 = Color3.new(1,1,1)
+            local btnCorner = Instance.new("UICorner", playerButton)
+            btnCorner.CornerRadius = UDim.new(0, 6)
+            playerButton.MouseButton1Click:Connect(function()
+                flyToPlayer(player)
+                dropdownFrame.Visible = false
+            end)
+        end
+    end
+    local totalHeight = 0
+    for _, child in ipairs(dropdownFrame:GetChildren()) do
+        if child:IsA("TextButton") then
+            totalHeight = totalHeight + child.AbsoluteSize.Y
+        end
+    end
+    dropdownFrame.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
+end
+
+selectButton.MouseButton1Click:Connect(function()
+    updatePlayerList()
+    dropdownFrame.Visible = not dropdownFrame.Visible
+end)
+
+stopButton.MouseButton1Click:Connect(function()
+    stopFlight()
+end)
+
+walkSpeedToggleButton.MouseButton1Click:Connect(function()
+    walkSpeedBypassActive = not walkSpeedBypassActive
+    if walkSpeedBypassActive then
+        enableWalkSpeedBypass()
+        if keyBindings.WalkSpeed then
+            walkSpeedToggleButton.Text = "WalkSpeed: On (" .. keyBindings.WalkSpeed.Name .. ")"
+        else
+            walkSpeedToggleButton.Text = "WalkSpeed: On"
+        end
+    else
+        disableWalkSpeedBypass()
+        if keyBindings.WalkSpeed then
+            walkSpeedToggleButton.Text = "WalkSpeed: Off (" .. keyBindings.WalkSpeed.Name .. ")"
+        else
+            walkSpeedToggleButton.Text = "WalkSpeed: Off"
+        end
+    end
+end)
+
+infiniteJumpToggleButton.MouseButton1Click:Connect(function()
+    infiniteJumpActive = not infiniteJumpActive
+    if infiniteJumpActive then
+        enableInfiniteJump()
+        if keyBindings.InfiniteJump then
+            infiniteJumpToggleButton.Text = "Infinite Jump: On (" .. keyBindings.InfiniteJump.Name .. ")"
+        else
+            infiniteJumpToggleButton.Text = "Infinite Jump: On"
+        end
+    else
+        disableInfiniteJump()
+        if keyBindings.InfiniteJump then
+            infiniteJumpToggleButton.Text = "Infinite Jump: Off (" .. keyBindings.InfiniteJump.Name .. ")"
+        else
+            infiniteJumpToggleButton.Text = "Infinite Jump: Off"
+        end
+    end
+end)
+
+noclipToggleButton.MouseButton1Click:Connect(function()
+    noclipActive = not noclipActive
+    if noclipActive then
+        enableNoclip()
+        if keyBindings.Noclip then
+            noclipToggleButton.Text = "Noclip: On (" .. keyBindings.Noclip.Name .. ")"
+        else
+            noclipToggleButton.Text = "Noclip: On"
+        end
+    else
+        disableNoclip()
+        if keyBindings.Noclip then
+            noclipToggleButton.Text = "Noclip: Off (" .. keyBindings.Noclip.Name .. ")"
+        else
+            noclipToggleButton.Text = "Noclip: Off"
+        end
+    end
+end)
+
+local toggleButton = Instance.new("TextButton")
+toggleButton.Parent = screenGui
+toggleButton.Size = UDim2.new(0, 100, 0, 40)
+toggleButton.Position = UDim2.new(0, 10, 0, 10)
+toggleButton.Text = "Open"
+toggleButton.BackgroundColor3 = Color3.fromRGB(70,70,70)
+toggleButton.TextScaled = true
+toggleButton.Font = Enum.Font.GothamBold
+local toggleCorner = Instance.new("UICorner", toggleButton)
+toggleCorner.CornerRadius = UDim.new(0, 8)
+
+toggleButton.MouseButton1Click:Connect(function()
+    mainFrame.Visible = not mainFrame.Visible
+    if mainFrame.Visible then
+        toggleButton.Text = "Close"
+    else
+        toggleButton.Text = "Open"
+    end
+end)
+
+------------------------------------------------
+-- KOORDİNATLARI GÜNCELLEME (SOL ALT)
+------------------------------------------------
+
+RunService.RenderStepped:Connect(function()
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local pos = LocalPlayer.Character.HumanoidRootPart.Position
+        coordsLabel.Text = string.format("X: %.1f  Y: %.1f  Z: %.1f", pos.X, pos.Y, pos.Z)
+    end
+end)
