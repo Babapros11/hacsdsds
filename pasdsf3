@@ -236,7 +236,7 @@ local titleLabel = Instance.new("TextLabel")
 titleLabel.Parent = mainFrame
 titleLabel.Size = UDim2.new(1, 0, 0, 50)
 titleLabel.Position = UDim2.new(0, 0, 0, 0)
-titleLabel.Text = "JailBreak Hacks By unknown"
+titleLabel.Text = "JailBreak Hacks By Bapros244s"
 titleLabel.BackgroundColor3 = Color3.fromRGB(30,30,30)
 titleLabel.TextScaled = true
 titleLabel.Font = Enum.Font.GothamBold
@@ -553,6 +553,71 @@ toggleButton.MouseButton1Click:Connect(function()
     else
         toggleButton.Text = "Open"
     end
+end)
+
+------------------------------------------------
+-- YENİ: CREDITS BUTONU VE PENCERESİ (SAĞ ALT)
+------------------------------------------------
+
+local creditsButton = Instance.new("TextButton")
+creditsButton.Parent = screenGui
+creditsButton.Size = UDim2.new(0, 120, 0, 40)
+creditsButton.AnchorPoint = Vector2.new(1,1)
+creditsButton.Position = UDim2.new(1, -10, 1, -10)
+creditsButton.Text = "Credits"
+creditsButton.BackgroundColor3 = Color3.fromRGB(70,70,70)
+creditsButton.TextScaled = true
+creditsButton.Font = Enum.Font.GothamBold
+creditsButton.TextColor3 = Color3.new(1,1,1)
+local creditsCorner = Instance.new("UICorner", creditsButton)
+creditsCorner.CornerRadius = UDim.new(0, 8)
+
+local creditsFrame = Instance.new("Frame")
+creditsFrame.Parent = screenGui
+creditsFrame.Size = UDim2.new(0, 300, 0, 200)
+creditsFrame.Position = UDim2.new(0.5, -150, 0.5, -100)
+creditsFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+creditsFrame.BorderSizePixel = 0
+creditsFrame.Visible = false
+local creditsFrameCorner = Instance.new("UICorner", creditsFrame)
+creditsFrameCorner.CornerRadius = UDim.new(0, 12)
+
+local creditsTitle = Instance.new("TextLabel")
+creditsTitle.Parent = creditsFrame
+creditsTitle.Size = UDim2.new(1, 0, 0, 50)
+creditsTitle.Position = UDim2.new(0, 0, 0, 0)
+creditsTitle.Text = "Credits"
+creditsTitle.BackgroundColor3 = Color3.fromRGB(30,30,30)
+creditsTitle.TextScaled = true
+creditsTitle.Font = Enum.Font.GothamBold
+creditsTitle.TextColor3 = Color3.new(1,1,1)
+local creditsContent = Instance.new("TextLabel")
+creditsContent.Parent = creditsFrame
+creditsContent.Size = UDim2.new(1, -20, 1, -70)
+creditsContent.Position = UDim2.new(0, 10, 0, 60)
+creditsContent.Text = "Developer:Bapros244s\nTester:AyPrimm"
+creditsContent.BackgroundTransparency = 1
+creditsContent.TextScaled = true
+creditsContent.Font = Enum.Font.GothamSemibold
+creditsContent.TextColor3 = Color3.new(1,1,1)
+local closeCreditsButton = Instance.new("TextButton")
+closeCreditsButton.Parent = creditsFrame
+closeCreditsButton.Size = UDim2.new(0, 100, 0, 40)
+closeCreditsButton.Position = UDim2.new(1, -110, 1, -50)
+closeCreditsButton.Text = "Close"
+closeCreditsButton.BackgroundColor3 = Color3.fromRGB(70,70,70)
+closeCreditsButton.TextScaled = true
+closeCreditsButton.Font = Enum.Font.GothamBold
+closeCreditsButton.TextColor3 = Color3.new(1,1,1)
+local closeCreditsCorner = Instance.new("UICorner", closeCreditsButton)
+closeCreditsCorner.CornerRadius = UDim.new(0, 8)
+
+creditsButton.MouseButton1Click:Connect(function()
+    creditsFrame.Visible = true
+end)
+
+closeCreditsButton.MouseButton1Click:Connect(function()
+    creditsFrame.Visible = false
 end)
 
 ------------------------------------------------
